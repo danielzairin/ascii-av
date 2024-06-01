@@ -7,7 +7,12 @@ import (
 	"os"
 )
 
-var HEADER_SIZE = 10
+// Thank you internet:
+// ID3 2.4.0 specs - https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.4.0-structure.html
+// MP3 header specs - http://mpgedit.org/mpgedit/mpeg_format/mpeghdr.htm
+
+const ID3_HEADER_SIZE = 10
+const MP3_HEADER_SIZE = 10
 
 func check(err error) {
 	if err != nil {
@@ -15,25 +20,34 @@ func check(err error) {
 	}
 }
 
-// ID3 2.4.0 specs: https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.4.0-structure.html
 func main() {
 	file, err := os.Open("song.mp3")
 	defer file.Close()
 	check(err)
 
 	reader := bufio.NewReader(file)
-	header := make([]byte, HEADER_SIZE)
-	for i := 0; i < HEADER_SIZE; i++ {
-		header[i], err = reader.ReadByte()
+	var id3Header [ID3_HEADER_SIZE]byte
+	for i := 0; i < ID3_HEADER_SIZE; i++ {
+		id3Header[i], err = reader.ReadByte()
 		check(err)
 	}
 
-	fmt.Printf("ID3 tag header: %v\n", header)
+	fmt.Printf("ID3 tag header: %b\n", id3Header)
 
-	last4Bytes := [4]byte(header[HEADER_SIZE-4:])
-	tagSize := HEADER_SIZE + int(parseSynchsafeInt(last4Bytes))
+	last4Bytes := [4]byte(id3Header[ID3_HEADER_SIZE-4:])
+	bodySize := int(parseSynchsafeInt(last4Bytes))
 
-	fmt.Printf("ID3 tag size: %d\n", tagSize)
+	skipped, err := reader.Discard(bodySize)
+
+	fmt.Printf("Skipped: %d bytes\n", skipped)
+
+	var mp3Header [MP3_HEADER_SIZE]byte
+	for i := 0; i < len(mp3Header); i++ {
+		mp3Header[i], err = reader.ReadByte()
+		check(err)
+	}
+
+	fmt.Printf("MP3 header: %X\n", mp3Header)
 }
 
 // TODO: Test this
